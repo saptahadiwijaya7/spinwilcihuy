@@ -8,9 +8,10 @@ type Props = {
   spinning: boolean;
   rotation: number;
   onSpin?: () => void;
+  spinDurationMs: number;
 };
 
-export default function SpinWheel({ names, spinning, rotation, onSpin }: Props) {
+export default function SpinWheel({ names, spinning, rotation, onSpin, spinDurationMs }: Props) {
   const visibleNames = useMemo(() => names.slice(0, 60), [names]);
   const count = Math.max(visibleNames.length, 1);
   const segment = 360 / count;
@@ -34,7 +35,7 @@ export default function SpinWheel({ names, spinning, rotation, onSpin }: Props) 
         style={{
           background: `conic-gradient(${gradient})`,
           transform: `rotate(${rotation}deg)`,
-          transitionDuration: spinning ? "4200ms" : "700ms"
+          transitionDuration: spinning ? `${spinDurationMs}ms` : "700ms"
         }}
       >
         {visibleNames.map((name, index) => {

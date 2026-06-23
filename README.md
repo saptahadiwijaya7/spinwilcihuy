@@ -71,3 +71,12 @@ File > Import > Upload > pilih file CSV
 ## Update v4
 - Header memakai background mascot lucu dari gambar yang diberikan.
 - Desain header dibuat lebih playful dengan gradient pastel, chip mascot, dan tombol fullscreen tetap tersedia.
+
+## Update audio dan durasi spin
+
+- Durasi spin dapat diatur dari 2 sampai 60 detik.
+- Animasi wheel mengikuti durasi yang dipilih.
+- Efek suara roda berputar aktif saat spin berjalan.
+- Efek suara terompet aktif saat popup pemenang muncul.
+- Suara FX dapat di-mute dan di-unmute dari panel kontrol.
+- Pengaturan durasi dan mute/unmute tersimpan otomatis di browser.

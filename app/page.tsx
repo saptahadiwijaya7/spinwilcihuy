@@ -1,7 +1,7 @@
 "use client";
 
 import confetti from "canvas-confetti";
-import { Maximize2, Play, RotateCcw, Trash2 } from "lucide-react";
+import { Maximize2, Play, RotateCcw, Trash2, Volume2, VolumeX } from "lucide-react";
 import ImportPanel from "@/components/ImportPanel";
 import SpinWheel from "@/components/SpinWheel";
 import WinnerList, { WinnerRecord } from "@/components/WinnerList";
@@ -25,7 +25,12 @@ export default function HomePage() {
   const [latestWinners, setLatestWinners] = useState<string[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
+  const [spinDuration, setSpinDuration] = useState(5);
+  const [soundMuted, setSoundMuted] = useState(false);
   const wheelFullscreenRef = useRef<HTMLElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const spinSoundTimerRef = useRef<number | null>(null);
+  const soundMutedRef = useRef(soundMuted);
 
   const canSpin = names.length > 0 && !spinning && names.length >= winnerCount;
   const participantPreview = useMemo(() => names.slice(0, 10), [names]);
@@ -34,17 +39,28 @@ export default function HomePage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     try {
-      const data = JSON.parse(raw) as { names?: string[]; winners?: WinnerRecord[] };
+      const data = JSON.parse(raw) as { names?: string[]; winners?: WinnerRecord[]; spinDuration?: number; soundMuted?: boolean };
       setNames(normalizeNames(data.names ?? []));
       setWinners(data.winners ?? []);
+      setSpinDuration(Math.max(2, Math.min(60, Number(data.spinDuration ?? 5))));
+      setSoundMuted(Boolean(data.soundMuted));
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ names, winners }));
-  }, [names, winners]);
+    soundMutedRef.current = soundMuted;
+    if (soundMuted) stopSpinSound();
+  }, [soundMuted]);
+
+  useEffect(() => {
+    return () => stopSpinSound();
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ names, winners, spinDuration, soundMuted }));
+  }, [names, winners, spinDuration, soundMuted]);
 
   function addNames(incoming: string[]) {
     setNames((current) => normalizeNames([...current, ...incoming]).slice(0, 1000));
@@ -85,13 +101,74 @@ export default function HomePage() {
     wheelFullscreenRef.current?.requestFullscreen?.();
   }
 
+  function getAudioContext() {
+    if (soundMutedRef.current) return null;
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return null;
+    if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
+    void audioContextRef.current.resume();
+    return audioContextRef.current;
+  }
+
+  function playTickSound() {
+    const context = getAudioContext();
+    if (!context) return;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(520 + Math.random() * 180, context.currentTime);
+    gain.gain.setValueAtTime(0.035, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.045);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.05);
+  }
+
+  function startSpinSound() {
+    if (soundMutedRef.current) return;
+    stopSpinSound();
+    playTickSound();
+    spinSoundTimerRef.current = window.setInterval(playTickSound, 85);
+  }
+
+  function stopSpinSound() {
+    if (spinSoundTimerRef.current === null) return;
+    window.clearInterval(spinSoundTimerRef.current);
+    spinSoundTimerRef.current = null;
+  }
+
+  function playTrumpetSound() {
+    const context = getAudioContext();
+    if (!context) return;
+    const now = context.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+
+    notes.forEach((frequency, index) => {
+      const start = now + index * 0.13;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sawtooth";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.linearRampToValueAtTime(0.10, start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.24);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(start);
+      oscillator.stop(start + 0.26);
+    });
+  }
+
   function spin() {
     if (!canSpin) return;
 
     setHistory((current) => [...current, { previousNames: names, previousWinners: winners }]);
     setLatestWinners([]);
     setSpinning(true);
-    setRotation((current) => current + 1440 + Math.floor(Math.random() * 720));
+    const spinDurationMs = spinDuration * 1000;
+    startSpinSound();
+    setRotation((current) => current + spinDuration * 360 + 720 + Math.floor(Math.random() * 720));
 
     window.setTimeout(() => {
       const result = pickWinners(names, winnerCount);
@@ -107,8 +184,10 @@ export default function HomePage() {
       setLatestWinners(result.winners);
       setShowWinnerPopup(true);
       setSpinning(false);
+      stopSpinSound();
+      playTrumpetSound();
       confetti({ particleCount: 160, spread: 80, origin: { y: 0.62 } });
-    }, 4300);
+    }, spinDurationMs);
   }
 
   return (
@@ -171,6 +250,31 @@ export default function HomePage() {
               />
               <div className="mb-4 mt-2 text-center text-4xl font-black text-blue-600">{winnerCount}</div>
 
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Durasi spin</label>
+              <input
+                type="range"
+                min={2}
+                max={60}
+                value={spinDuration}
+                onChange={(event) => setSpinDuration(Number(event.target.value))}
+                className="w-full"
+              />
+              <div className="mb-4 mt-2 flex items-center justify-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-xl font-black text-blue-700">
+                {spinDuration} detik
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!soundMuted) stopSpinSound();
+                  setSoundMuted((current) => !current);
+                }}
+                className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+              >
+                {soundMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                {soundMuted ? "Suara FX: Mute" : "Suara FX: Aktif"}
+              </button>
+
               <button
                 onClick={spin}
                 disabled={!canSpin}
@@ -191,15 +295,16 @@ export default function HomePage() {
           </aside>
 
           <section ref={wheelFullscreenRef} className="wheel-fullscreen rounded-3xl bg-white/70 p-5 shadow-soft backdrop-blur">
-            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
               <Stat label="Peserta aktif" value={names.length} />
               <Stat label="Total pemenang" value={winners.length} />
               <Stat label="Maks peserta" value="1000" />
               <Stat label="Mode spin" value={winnerCount} />
+              <Stat label="Durasi" value={`${spinDuration}s`} />
               {/* <Stat label="Mode spin" value={`${winnerCount} nama`} /> */}
             </div>
 
-            <SpinWheel names={names} spinning={spinning} rotation={rotation} onSpin={spin} />
+            <SpinWheel names={names} spinning={spinning} rotation={rotation} onSpin={spin} spinDurationMs={spinDuration * 1000} />
             <p className="mt-3 text-center text-sm font-semibold text-slate-500">Klik tombol spin atau klik poros wheel untuk memulai undian.</p>
 
             <div className="mt-6 rounded-3xl bg-slate-950 p-5 text-white">
