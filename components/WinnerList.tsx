@@ -86,7 +86,7 @@ export default function WinnerList({ winners, remainingNames, onUndo, onResetWin
             <div key={`${winner.batch}-${winner.name}-${index}`} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-bold text-slate-950">{winner.name}</p>
-                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700">Batch {winner.batch}</span>
+                <span className="rounded-full bg-[#ffe5f0] px-2 py-1 text-xs font-bold text-[#ad0c45]">Batch {winner.batch}</span>
               </div>
               <p className="mt-1 text-xs text-slate-500">{winner.wonAt}</p>
             </div>

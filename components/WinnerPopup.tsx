@@ -33,19 +33,21 @@ export default function WinnerPopup({ winners, open, onClose }: Props) {
 
         <div className="shrink-0 px-8">
           <p className="text-3xl sm:text-4xl">🏆</p>
-          <p className="mt-2 text-xl font-black uppercase tracking-[0.18em] text-blue-600 sm:text-3xl">Selamat!</p>
+          <p className="mt-2 text-xl font-black uppercase tracking-[0.18em] text-[#ed3969] sm:text-3xl">Selamat!</p>
           <p className="mt-2 text-sm font-bold text-slate-500 sm:text-base">
             Berikut adalah {winners.length} pemenang
           </p>
         </div>
 
-        <div className="mt-6 grid flex-1 grid-cols-1 content-center gap-3 overflow-y-auto px-1 sm:grid-cols-2 sm:gap-4">
+        <div
+          className={`mt-6 grid flex-1 ${winners.length === 1 ? 'grid-cols-1 sm:grid-cols-1 place-items-center' : 'grid-cols-1 sm:grid-cols-2'} content-center gap-3 overflow-y-auto px-1 sm:gap-4`}
+        >
           {winners.map((name, index) => {
             const color = wheelColors[index % wheelColors.length];
             return (
               <div
                 key={`${name}-${index}`}
-                className="flex min-h-[76px] items-center justify-center gap-4 rounded-3xl border px-4 py-4 shadow-sm sm:min-h-[86px]"
+                className={`flex min-h-[76px] items-center justify-center gap-4 rounded-3xl border px-4 py-4 shadow-sm sm:min-h-[86px] ${winners.length === 1 ? 'justify-self-center w-full sm:w-auto sm:max-w-md zoom-in' : ''}`}
                 style={{
                   background: `linear-gradient(135deg, ${hexToRgba(color, 0.20)}, ${hexToRgba(color, 0.08)})`,
                   borderColor: hexToRgba(color, 0.30)
@@ -68,7 +70,7 @@ export default function WinnerPopup({ winners, open, onClose }: Props) {
         <div className="mt-6 shrink-0">
           <button
             onClick={onClose}
-            className="rounded-2xl bg-slate-950 px-8 py-4 text-base font-black text-white shadow-lg hover:bg-blue-700"
+            className="rounded-2xl bg-slate-950 px-8 py-4 text-base font-black text-white shadow-lg hover:bg-[#c71756]"
           >
             Tutup
           </button>

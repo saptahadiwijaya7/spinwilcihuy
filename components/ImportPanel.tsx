@@ -55,9 +55,10 @@ export default function ImportPanel({ onAddNames }: Props) {
 
   return (
     <section className="rounded-3xl bg-white p-5 shadow-soft">
-      <h2 className="mb-4 text-lg font-bold text-slate-950">Import Peserta</h2>
+      <h2 className="mb-2 text-lg font-bold text-slate-950">Import Peserta</h2>
+      <p className="mb-4 text-sm text-slate-600">Maks peserta aktif sampai 1000, import Excel / CSV / Google Sheet / paste manual.</p>
 
-      <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-700 hover:border-blue-400 hover:bg-blue-50">
+      <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-700 hover:border-[#ed3969] hover:bg-[#ffe5f0]">
         <Upload size={18} />
         Upload Excel / CSV
         <input
@@ -77,7 +78,7 @@ export default function ImportPanel({ onAddNames }: Props) {
           value={sheetUrl}
           onChange={(event) => setSheetUrl(event.target.value)}
           placeholder="Tempel URL Google Sheet"
-          className="mb-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
+          className="mb-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#ed3969]"
         />
         <button
           onClick={handleSheetImport}
@@ -97,12 +98,12 @@ export default function ImportPanel({ onAddNames }: Props) {
           onChange={(event) => setManual(event.target.value)}
           rows={5}
           placeholder="Satu nama per baris, atau pisahkan dengan koma"
-          className="mb-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
+          className="mb-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#ed3969]"
         />
         <button
           onClick={handleManualAdd}
           disabled={!manual.trim()}
-          className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="w-full rounded-xl bg-[#ed3969] px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           Tambahkan Nama
         </button>

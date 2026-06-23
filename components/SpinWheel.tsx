@@ -11,9 +11,10 @@ type Props = {
   onSpin?: () => void;
   spinDurationMs: number;
   winnerCount: number;
+  scale?: number;
 };
 
-export default function SpinWheel({ names, spinning, rotation, onSpin, spinDurationMs, winnerCount }: Props) {
+export default function SpinWheel({ names, spinning, rotation, onSpin, spinDurationMs, winnerCount, scale = 1 }: Props) {
   const wheelNames = useMemo(() => names, [names]);
   const count = Math.max(wheelNames.length, 1);
   const segment = 360 / count;
@@ -30,7 +31,10 @@ export default function SpinWheel({ names, spinning, rotation, onSpin, spinDurat
     : "#e2e8f0 0deg 360deg";
 
   return (
-    <div className="relative mx-auto flex aspect-square w-full max-w-[540px] items-center justify-center">
+    <div
+      className="relative mx-auto flex aspect-square w-full items-center justify-center"
+      style={{ transform: `scale(${scale})`, transformOrigin: "center center", maxWidth: "540px" }}
+    >
       {arrowAngles.map((angle, index) => (
         <div
           key={index}
@@ -75,10 +79,10 @@ export default function SpinWheel({ names, spinning, rotation, onSpin, spinDurat
             onSpin?.();
           }}
           disabled={spinning}
-          className="absolute left-1/2 top-1/2 flex h-28 w-28 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-8 border-white bg-slate-950 text-center text-sm font-black text-white shadow-xl transition hover:scale-105 hover:bg-blue-700 disabled:cursor-wait disabled:hover:scale-100 sm:h-32 sm:w-32"
+          className="absolute left-1/2 top-1/2 flex h-28 w-28 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-8 border-white bg-slate-950 text-center text-sm font-black text-white shadow-xl transition hover:scale-105 hover:bg-[#c71756] disabled:cursor-wait disabled:hover:scale-100 sm:h-32 sm:w-32"
           aria-label="Klik untuk spin"
         >
-          <span>SPIN<br /><span className="text-[10px] font-semibold opacity-80">klik</span></span>
+          <span className="text-xl font-extrabold tracking-tight">SPIN!</span>
         </button>
       </div>
 

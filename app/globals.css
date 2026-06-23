@@ -67,3 +67,18 @@ body {
     min-height: 0;
   }
 }
+
+/* Zoom-in animation for single winner card */
+@keyframes zoomIn {
+  from {
+    transform: scale(.86);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.zoom-in {
+  animation: zoomIn 420ms cubic-bezier(.2,.9,.25,1) both;
+}

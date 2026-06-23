@@ -27,8 +27,14 @@ export default function HomePage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [spinDuration, setSpinDuration] = useState(5);
+  const [winnerRevealDelay, setWinnerRevealDelay] = useState(1);
   const [soundMuted, setSoundMuted] = useState(false);
+  const [wheelScale, setWheelScale] = useState(1);
+  const [isWheelFullscreen, setIsWheelFullscreen] = useState(false);
+  const [isPageFullscreen, setIsPageFullscreen] = useState(false);
   const wheelFullscreenRef = useRef<HTMLElement | null>(null);
+  const spinFinishTimerRef = useRef<number | null>(null);
+  const revealTimerRef = useRef<number | null>(null);
   const [customSpinSound, setCustomSpinSound] = useState<string>("");
   const [customWinSound, setCustomWinSound] = useState<string>("");
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -44,10 +50,11 @@ export default function HomePage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     try {
-      const data = JSON.parse(raw) as { names?: string[]; winners?: WinnerRecord[]; spinDuration?: number; soundMuted?: boolean; customSpinSound?: string; customWinSound?: string };
+      const data = JSON.parse(raw) as { names?: string[]; winners?: WinnerRecord[]; spinDuration?: number; winnerRevealDelay?: number; soundMuted?: boolean; customSpinSound?: string; customWinSound?: string };
       setNames(normalizeNames(data.names ?? []));
       setWinners(data.winners ?? []);
       setSpinDuration(Math.max(2, Math.min(60, Number(data.spinDuration ?? 5))));
+      setWinnerRevealDelay(Math.max(0, Math.min(10, Number(data.winnerRevealDelay ?? 1))));
       setSoundMuted(Boolean(data.soundMuted));
       setCustomSpinSound(data.customSpinSound ?? "");
       setCustomWinSound(data.customWinSound ?? "");
@@ -62,12 +69,27 @@ export default function HomePage() {
   }, [soundMuted]);
 
   useEffect(() => {
-    return () => stopSpinSound();
+    function handleFullscreenChange() {
+      const fullscreenElement = document.fullscreenElement;
+      setIsWheelFullscreen(fullscreenElement === wheelFullscreenRef.current);
+      setIsPageFullscreen(fullscreenElement === document.documentElement);
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ names, winners, spinDuration, soundMuted, customSpinSound, customWinSound }));
-  }, [names, winners, spinDuration, soundMuted, customSpinSound, customWinSound]);
+    return () => {
+      stopSpinSound();
+      if (spinFinishTimerRef.current !== null) window.clearTimeout(spinFinishTimerRef.current);
+      if (revealTimerRef.current !== null) window.clearTimeout(revealTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ names, winners, spinDuration, winnerRevealDelay, soundMuted, customSpinSound, customWinSound }));
+  }, [names, winners, spinDuration, winnerRevealDelay, soundMuted, customSpinSound, customWinSound]);
 
   function addNames(incoming: string[]) {
     setNames((current) => normalizeNames([...current, ...incoming]).slice(0, 1000));
@@ -84,6 +106,14 @@ export default function HomePage() {
     setHistory([]);
     setLatestWinners([]);
     localStorage.removeItem(STORAGE_KEY);
+    if (spinFinishTimerRef.current !== null) {
+      window.clearTimeout(spinFinishTimerRef.current);
+      spinFinishTimerRef.current = null;
+    }
+    if (revealTimerRef.current !== null) {
+      window.clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
   }
 
   function resetWinners() {
@@ -106,6 +136,12 @@ export default function HomePage() {
 
   function fullscreenWheel() {
     wheelFullscreenRef.current?.requestFullscreen?.();
+  }
+
+  function exitFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    }
   }
 
   function getAudioContext() {
@@ -207,26 +243,37 @@ export default function HomePage() {
     setLatestWinners([]);
     setSpinning(true);
     const spinDurationMs = spinDuration * 1000;
+    const revealDelayMs = winnerRevealDelay * 1000;
     startSpinSound();
     setRotation(plannedResult.finalRotation);
 
-    window.setTimeout(() => {
-      const result = plannedResult;
-      const batch = winners.length ? Math.max(...winners.map((winner) => winner.batch)) + 1 : 1;
-      const now = new Date().toLocaleString("id-ID", {
-        dateStyle: "medium",
-        timeStyle: "short"
-      });
-      const records = result.winners.map((name) => ({ batch, name, wonAt: now }));
+    if (spinFinishTimerRef.current !== null) {
+      window.clearTimeout(spinFinishTimerRef.current);
+    }
+    if (revealTimerRef.current !== null) {
+      window.clearTimeout(revealTimerRef.current);
+    }
 
-      setNames(result.remaining);
-      setWinners((current) => [...current, ...records]);
-      setLatestWinners(result.winners);
-      setShowWinnerPopup(true);
-      setSpinning(false);
+    spinFinishTimerRef.current = window.setTimeout(() => {
       stopSpinSound();
-      playTrumpetSound();
-      confetti({ particleCount: 160, spread: 80, origin: { y: 0.62 } });
+      setSpinning(false);
+
+      revealTimerRef.current = window.setTimeout(() => {
+        const result = plannedResult;
+        const batch = winners.length ? Math.max(...winners.map((winner) => winner.batch)) + 1 : 1;
+        const now = new Date().toLocaleString("id-ID", {
+          dateStyle: "medium",
+          timeStyle: "short"
+        });
+        const records = result.winners.map((name) => ({ batch, name, wonAt: now }));
+
+        setNames(result.remaining);
+        setWinners((current) => [...current, ...records]);
+        setLatestWinners(result.winners);
+        setShowWinnerPopup(true);
+        playTrumpetSound();
+        confetti({ particleCount: 160, spread: 80, origin: { y: 0.62 } });
+      }, revealDelayMs);
     }, spinDurationMs);
   }
 
@@ -234,16 +281,16 @@ export default function HomePage() {
     <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
       <audio ref={spinAudioRef} src={customSpinSound || undefined} preload="auto" />
       <audio ref={winAudioRef} src={customWinSound || undefined} preload="auto" />
-      <WinnerPopup winners={latestWinners} open={showWinnerPopup} onClose={() => setShowWinnerPopup(false)} />
+      {!isWheelFullscreen && <WinnerPopup winners={latestWinners} open={showWinnerPopup} onClose={() => setShowWinnerPopup(false)} />}
       <div className="mx-auto max-w-7xl">
         <header className="mascot-header relative mb-6 overflow-hidden rounded-[2rem] p-5 shadow-soft sm:p-7">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white/95 via-white/80 to-white/70" />
           
           <div className="pointer-events-none absolute -left-10 -top-10 h-36 w-36 rounded-full bg-pink-200/60 blur-2xl" />
-          <div className="pointer-events-none absolute right-28 top-4 h-28 w-28 rounded-full bg-blue-200/70 blur-2xl" />
+          <div className="pointer-events-none absolute right-28 top-4 h-28 w-28 rounded-full bg-[#ed3969]/70 blur-2xl" />
           <div className="relative z-10 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="max-w-2xl">
-              <div className="mb-3 inline-flex rounded-full bg-white/90 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-blue-600 shadow-sm ring-1 ring-blue-100">
+              <div className="mb-3 inline-flex rounded-full bg-white/90 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ed3969] shadow-sm ring-1 ring-[#fbd1df]">
                 🎉 SAPSOFT
               </div>
               <img
@@ -252,7 +299,7 @@ export default function HomePage() {
             className="pointer-events-none absolute bottom-0 right-0 z-0 hidden h-[135px] w-auto select-none object-contain opacity-95 md:block lg:h-[168px]"
           />
               <h1 className="text-4xl font-black tracking-tight text-slate-950 drop-shadow-sm sm:text-5xl">
-                Spinwil <span className="text-blue-600">Cihuy</span>
+                Spinwil <span className="text-[#ed3969]">Cihuy</span>
               </h1>
               {/* <p className="mt-3 max-w-xl rounded-2xl bg-white/75 px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm backdrop-blur">
                 Undi hingga 1000 peserta, pilih 1-10 pemenang per spin, dan hapus pemenang otomatis dari daftar aktif.
@@ -260,15 +307,15 @@ export default function HomePage() {
               <div className="mt-3 flex flex-wrap gap-2 text-xs font-black text-slate-700">
                 <span className="rounded-full bg-yellow-100 px-3 py-1.5">🐯 Siap undi!</span>
                 <span className="rounded-full bg-pink-100 px-3 py-1.5">🐰 Semoga beruntung</span>
-                <span className="rounded-full bg-blue-100 px-3 py-1.5">🐧 Bingung? Tanya kak sapta!</span>
+                <span className="rounded-full bg-[#ffe5f0] px-3 py-1.5">🐧 Bingung? Tanya kak sapta!</span>
                 
               </div>
             </div>
             <div className="flex flex-wrap gap-2 rounded-3xl bg-white/10 p-2 shadow-sm backdrop-blur md:mr-[150px] lg:mr-[5px] lg:mb-[-110px]">
-              <button onClick={fullscreenWheel} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-white px-5 py-3 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-50">
+              <button onClick={fullscreenWheel} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#f4a7c0] bg-white px-5 py-3 text-sm font-bold text-[#ad0c45] shadow-sm hover:bg-[#ffe5f0]">
                 <Maximize2 size={18} /> Bigwil
               </button>
-              <button onClick={fullscreenUi} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-lg hover:bg-blue-700">
+              <button onClick={fullscreenUi} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-lg hover:bg-[#c71756]">
                 <Maximize2 size={18} /> Fulskrin
               </button>
             </div>
@@ -281,6 +328,20 @@ export default function HomePage() {
 
             <section className="rounded-3xl bg-white p-5 shadow-soft">
               <h2 className="mb-4 text-lg font-bold text-slate-950">Kontrol Undian</h2>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Ukuran SpinWheel</label>
+              <input
+                type="range"
+                min={0.7}
+                max={1.4}
+                step={0.05}
+                value={wheelScale}
+                onChange={(event) => setWheelScale(Number(event.target.value))}
+                className="w-full"
+              />
+              <div className="mb-4 mt-2 flex items-center justify-center gap-2 rounded-2xl bg-slate-50 px-4 py-3 text-xl font-black text-slate-700">
+                {Math.round(wheelScale * 100)}%
+              </div>
+
               <label className="mb-2 block text-sm font-semibold text-slate-700">Jumlah pemenang per spin</label>
               <input
                 type="range"
@@ -290,7 +351,7 @@ export default function HomePage() {
                 onChange={(event) => setWinnerCount(Number(event.target.value))}
                 className="w-full"
               />
-              <div className="mb-4 mt-2 text-center text-4xl font-black text-blue-600">{winnerCount}</div>
+              <div className="mb-4 mt-2 text-center text-4xl font-black text-[#ed3969]">{winnerCount}</div>
 
               <label className="mb-2 block text-sm font-semibold text-slate-700">Durasi spin</label>
               <input
@@ -301,8 +362,22 @@ export default function HomePage() {
                 onChange={(event) => setSpinDuration(Number(event.target.value))}
                 className="w-full"
               />
-              <div className="mb-4 mt-2 flex items-center justify-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-xl font-black text-blue-700">
+              <div className="mb-4 mt-2 flex items-center justify-center gap-2 rounded-2xl bg-[#ffe5f0] px-4 py-3 text-xl font-black text-[#ad0c45]">
                 {spinDuration} detik
+              </div>
+
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Tunda sebelum popup pemenang</label>
+              <input
+                type="range"
+                min={0}
+                max={10}
+                step={0.5}
+                value={winnerRevealDelay}
+                onChange={(event) => setWinnerRevealDelay(Number(event.target.value))}
+                className="w-full"
+              />
+              <div className="mb-4 mt-2 flex items-center justify-center gap-2 rounded-2xl bg-slate-50 px-4 py-3 text-xl font-black text-slate-700">
+                {winnerRevealDelay} detik
               </div>
 
               <button
@@ -319,11 +394,11 @@ export default function HomePage() {
 
               <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                 <p className="mb-2 text-sm font-black text-slate-700">Custom suara FX</p>
-                <label className="mb-2 block cursor-pointer rounded-xl bg-white px-3 py-2 text-center text-xs font-bold text-slate-700 shadow-sm hover:bg-blue-50">
+                <label className="mb-2 block cursor-pointer rounded-xl bg-white px-3 py-2 text-center text-xs font-bold text-slate-700 shadow-sm hover:bg-[#ffe5f0]">
                   Upload suara roda berputar
                   <input type="file" accept="audio/*" className="hidden" onChange={(event) => handleCustomSoundUpload(event.target.files?.[0], "spin")} />
                 </label>
-                <label className="block cursor-pointer rounded-xl bg-white px-3 py-2 text-center text-xs font-bold text-slate-700 shadow-sm hover:bg-blue-50">
+                <label className="block cursor-pointer rounded-xl bg-white px-3 py-2 text-center text-xs font-bold text-slate-700 shadow-sm hover:bg-[#ffe5f0]">
                   Upload suara pemenang/terompet
                   <input type="file" accept="audio/*" className="hidden" onChange={(event) => handleCustomSoundUpload(event.target.files?.[0], "win")} />
                 </label>
@@ -336,7 +411,7 @@ export default function HomePage() {
               <button
                 onClick={spin}
                 disabled={!canSpin}
-                className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ed3969] px-5 py-4 text-base font-black text-white shadow-lg shadow-[#f6a7c9] transition hover:bg-[#c71756] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
               >
                 <Play size={20} fill="currentColor" /> {spinning ? "Sedang spin..." : "Mulai Spin"}
               </button>
@@ -353,20 +428,28 @@ export default function HomePage() {
           </aside>
 
           <section ref={wheelFullscreenRef} className="wheel-fullscreen rounded-3xl bg-white/70 p-5 shadow-soft backdrop-blur">
-            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+            <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-4 items-stretch">
               <Stat label="Peserta aktif" value={names.length} />
-              <Stat label="Total pemenang" value={winners.length} />
-              <Stat label="Maks peserta" value="1000" />
+              <Stat label="Σ pemenang" value={winners.length} />
               <Stat label="Mode spin" value={winnerCount} />
               <Stat label="Durasi" value={`${spinDuration}s`} />
               {/* <Stat label="Mode spin" value={`${winnerCount} nama`} /> */}
             </div>
 
-            <SpinWheel names={names} spinning={spinning} rotation={rotation} onSpin={spin} spinDurationMs={spinDuration * 1000} winnerCount={winnerCount} />
-            <p className="mt-3 text-center text-sm font-semibold text-slate-500">Klik tombol spin atau klik poros wheel untuk memulai undian.</p>
+
+            <SpinWheel
+              names={names}
+              spinning={spinning}
+              rotation={rotation}
+              onSpin={spin}
+              spinDurationMs={spinDuration * 1000}
+              winnerCount={winnerCount}
+              scale={wheelScale}
+            />
+            {isWheelFullscreen && <WinnerPopup winners={latestWinners} open={showWinnerPopup} onClose={() => setShowWinnerPopup(false)} />}
 
             <div className="mt-6 rounded-3xl bg-slate-950 p-5 text-white">
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-blue-300">Pemenang Terbaru</p>
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#f091b6]">Pemenang Terbaru</p>
               {latestWinners.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {latestWinners.map((name) => (
@@ -385,7 +468,7 @@ export default function HomePage() {
                   {participantPreview.map((name) => (
                     <span key={name} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">{name}</span>
                   ))}
-                  {names.length > 10 && <span className="rounded-full bg-blue-100 px-3 py-2 text-xs font-bold text-blue-700">+{names.length - 10} lainnya</span>}
+                  {names.length > 10 && <span className="rounded-full bg-[#ffe5f0] px-3 py-2 text-xs font-bold text-[#ad0c45]">+{names.length - 10} lainnya</span>}
                 </div>
               ) : (
                 <p className="text-sm text-slate-500">Belum ada peserta. Import Excel, CSV, Google Sheet, atau paste manual.</p>
@@ -410,9 +493,9 @@ export default function HomePage() {
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl bg-white p-4 text-center shadow-sm">
-      <p className="text-2xl font-black text-slate-950">{value}</p>
-      <p className="mt-1 text-xs font-semibold text-slate-500">{label}</p>
+    <div className="rounded-2xl bg-white p-4 text-center shadow-sm h-full flex flex-col items-center justify-center">
+      <p className="text-2xl font-black text-slate-950 leading-none">{value}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-500 whitespace-nowrap truncate max-w-full">{label}</p>
     </div>
   );
 }
