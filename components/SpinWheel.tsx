@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { wheelColors } from "@/lib/wheelColors";
+import { getArrowAngles } from "@/lib/spinLogic";
 
 type Props = {
   names: string[];
@@ -9,15 +10,17 @@ type Props = {
   rotation: number;
   onSpin?: () => void;
   spinDurationMs: number;
+  winnerCount: number;
 };
 
-export default function SpinWheel({ names, spinning, rotation, onSpin, spinDurationMs }: Props) {
-  const visibleNames = useMemo(() => names.slice(0, 60), [names]);
-  const count = Math.max(visibleNames.length, 1);
+export default function SpinWheel({ names, spinning, rotation, onSpin, spinDurationMs, winnerCount }: Props) {
+  const wheelNames = useMemo(() => names, [names]);
+  const count = Math.max(wheelNames.length, 1);
   const segment = 360 / count;
+  const arrowAngles = getArrowAngles(Math.min(winnerCount, Math.max(names.length, 1)));
 
-  const gradient = visibleNames.length
-    ? visibleNames
+  const gradient = wheelNames.length
+    ? wheelNames
         .map((_, index) => {
           const start = index * segment;
           const end = (index + 1) * segment;
@@ -28,19 +31,32 @@ export default function SpinWheel({ names, spinning, rotation, onSpin, spinDurat
 
   return (
     <div className="relative mx-auto flex aspect-square w-full max-w-[540px] items-center justify-center">
-      <div className="absolute -right-2 top-1/2 z-20 h-0 w-0 -translate-y-1/2 border-y-[18px] border-r-[34px] border-y-transparent border-r-slate-950 drop-shadow-lg" />
+      {arrowAngles.map((angle, index) => (
+        <div
+          key={index}
+          className="pointer-events-none absolute inset-0 z-20"
+          style={{ transform: `rotate(${angle}deg)` }}
+        >
+          <div className="absolute -right-2 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[18px] border-r-[34px] border-y-transparent border-r-slate-950 drop-shadow-lg" />
+          {arrowAngles.length > 1 && (
+            <div className="absolute -right-8 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-white text-xs font-black text-slate-950 shadow">
+              {index + 1}
+            </div>
+          )}
+        </div>
+      ))}
 
       <div
-        className="relative aspect-square w-full rounded-full border-[14px] border-white shadow-soft transition-transform duration-[4200ms] ease-out"
+        className="relative aspect-square w-full rounded-full border-[14px] border-white shadow-soft transition-transform ease-out"
         style={{
-          background: `conic-gradient(${gradient})`,
+          background: `conic-gradient(from 90deg, ${gradient})`,
           transform: `rotate(${rotation}deg)`,
           transitionDuration: spinning ? `${spinDurationMs}ms` : "700ms"
         }}
       >
-        {visibleNames.map((name, index) => {
+        {wheelNames.map((name, index) => {
           const angle = index * segment + segment / 2;
-          const showText = visibleNames.length <= 80;
+          const showText = wheelNames.length <= 80;
           return showText ? (
             <div
               key={`${name}-${index}`}
@@ -68,7 +84,7 @@ export default function SpinWheel({ names, spinning, rotation, onSpin, spinDurat
 
       {names.length > 60 && (
         <div className="absolute bottom-6 rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 shadow">
-          Menampilkan 60 dari {names.length} nama
+Label disembunyikan untuk {names.length} nama agar wheel tetap rapi
         </div>
       )}
     </div>

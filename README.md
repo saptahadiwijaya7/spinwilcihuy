@@ -80,3 +80,9 @@ File > Import > Upload > pilih file CSV
 - Efek suara terompet aktif saat popup pemenang muncul.
 - Suara FX dapat di-mute dan di-unmute dari panel kontrol.
 - Pengaturan durasi dan mute/unmute tersimpan otomatis di browser.
+
+## Update akurasi panah v2
+
+- Posisi berhenti wheel sekarang diarahkan ke area tengah segment nama, bukan ke garis batas antar nama.
+- Logic pemenang tetap dihitung dari nama yang benar-benar berada di bawah setiap panah.
+- Untuk data besar, segment wheel mengikuti seluruh nama aktif; label nama otomatis disembunyikan agar tampilan tetap rapi.

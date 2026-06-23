@@ -6,7 +6,8 @@ import ImportPanel from "@/components/ImportPanel";
 import SpinWheel from "@/components/SpinWheel";
 import WinnerList, { WinnerRecord } from "@/components/WinnerList";
 import WinnerPopup from "@/components/WinnerPopup";
-import { normalizeNames, pickWinners } from "@/lib/randomizer";
+import { normalizeNames } from "@/lib/randomizer";
+import { calculateAccurateSpin } from "@/lib/spinLogic";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type HistoryItem = {
@@ -28,8 +29,12 @@ export default function HomePage() {
   const [spinDuration, setSpinDuration] = useState(5);
   const [soundMuted, setSoundMuted] = useState(false);
   const wheelFullscreenRef = useRef<HTMLElement | null>(null);
+  const [customSpinSound, setCustomSpinSound] = useState<string>("");
+  const [customWinSound, setCustomWinSound] = useState<string>("");
   const audioContextRef = useRef<AudioContext | null>(null);
   const spinSoundTimerRef = useRef<number | null>(null);
+  const spinAudioRef = useRef<HTMLAudioElement | null>(null);
+  const winAudioRef = useRef<HTMLAudioElement | null>(null);
   const soundMutedRef = useRef(soundMuted);
 
   const canSpin = names.length > 0 && !spinning && names.length >= winnerCount;
@@ -39,11 +44,13 @@ export default function HomePage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     try {
-      const data = JSON.parse(raw) as { names?: string[]; winners?: WinnerRecord[]; spinDuration?: number; soundMuted?: boolean };
+      const data = JSON.parse(raw) as { names?: string[]; winners?: WinnerRecord[]; spinDuration?: number; soundMuted?: boolean; customSpinSound?: string; customWinSound?: string };
       setNames(normalizeNames(data.names ?? []));
       setWinners(data.winners ?? []);
       setSpinDuration(Math.max(2, Math.min(60, Number(data.spinDuration ?? 5))));
       setSoundMuted(Boolean(data.soundMuted));
+      setCustomSpinSound(data.customSpinSound ?? "");
+      setCustomWinSound(data.customWinSound ?? "");
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -59,8 +66,8 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ names, winners, spinDuration, soundMuted }));
-  }, [names, winners, spinDuration, soundMuted]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ names, winners, spinDuration, soundMuted, customSpinSound, customWinSound }));
+  }, [names, winners, spinDuration, soundMuted, customSpinSound, customWinSound]);
 
   function addNames(incoming: string[]) {
     setNames((current) => normalizeNames([...current, ...incoming]).slice(0, 1000));
@@ -128,17 +135,48 @@ export default function HomePage() {
   function startSpinSound() {
     if (soundMutedRef.current) return;
     stopSpinSound();
+
+    if (customSpinSound && spinAudioRef.current) {
+      spinAudioRef.current.currentTime = 0;
+      spinAudioRef.current.loop = true;
+      void spinAudioRef.current.play().catch(() => {
+        playTickSound();
+        spinSoundTimerRef.current = window.setInterval(playTickSound, 85);
+      });
+      return;
+    }
+
     playTickSound();
     spinSoundTimerRef.current = window.setInterval(playTickSound, 85);
   }
 
   function stopSpinSound() {
+    if (spinAudioRef.current) {
+      spinAudioRef.current.pause();
+      spinAudioRef.current.currentTime = 0;
+    }
     if (spinSoundTimerRef.current === null) return;
     window.clearInterval(spinSoundTimerRef.current);
     spinSoundTimerRef.current = null;
   }
 
+  function handleCustomSoundUpload(file: File | undefined, target: "spin" | "win") {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result ?? "");
+      if (target === "spin") setCustomSpinSound(value);
+      else setCustomWinSound(value);
+    };
+    reader.readAsDataURL(file);
+  }
+
   function playTrumpetSound() {
+    if (!soundMutedRef.current && customWinSound && winAudioRef.current) {
+      winAudioRef.current.currentTime = 0;
+      void winAudioRef.current.play().catch(() => {});
+      return;
+    }
     const context = getAudioContext();
     if (!context) return;
     const now = context.currentTime;
@@ -163,15 +201,17 @@ export default function HomePage() {
   function spin() {
     if (!canSpin) return;
 
+    const plannedResult = calculateAccurateSpin(names, winnerCount, rotation, spinDuration);
+
     setHistory((current) => [...current, { previousNames: names, previousWinners: winners }]);
     setLatestWinners([]);
     setSpinning(true);
     const spinDurationMs = spinDuration * 1000;
     startSpinSound();
-    setRotation((current) => current + spinDuration * 360 + 720 + Math.floor(Math.random() * 720));
+    setRotation(plannedResult.finalRotation);
 
     window.setTimeout(() => {
-      const result = pickWinners(names, winnerCount);
+      const result = plannedResult;
       const batch = winners.length ? Math.max(...winners.map((winner) => winner.batch)) + 1 : 1;
       const now = new Date().toLocaleString("id-ID", {
         dateStyle: "medium",
@@ -192,6 +232,8 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
+      <audio ref={spinAudioRef} src={customSpinSound || undefined} preload="auto" />
+      <audio ref={winAudioRef} src={customWinSound || undefined} preload="auto" />
       <WinnerPopup winners={latestWinners} open={showWinnerPopup} onClose={() => setShowWinnerPopup(false)} />
       <div className="mx-auto max-w-7xl">
         <header className="mascot-header relative mb-6 overflow-hidden rounded-[2rem] p-5 shadow-soft sm:p-7">
@@ -269,11 +311,27 @@ export default function HomePage() {
                   if (!soundMuted) stopSpinSound();
                   setSoundMuted((current) => !current);
                 }}
-                className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
               >
                 {soundMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
                 {soundMuted ? "Suara FX: Mute" : "Suara FX: Aktif"}
               </button>
+
+              <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-sm font-black text-slate-700">Custom suara FX</p>
+                <label className="mb-2 block cursor-pointer rounded-xl bg-white px-3 py-2 text-center text-xs font-bold text-slate-700 shadow-sm hover:bg-blue-50">
+                  Upload suara roda berputar
+                  <input type="file" accept="audio/*" className="hidden" onChange={(event) => handleCustomSoundUpload(event.target.files?.[0], "spin")} />
+                </label>
+                <label className="block cursor-pointer rounded-xl bg-white px-3 py-2 text-center text-xs font-bold text-slate-700 shadow-sm hover:bg-blue-50">
+                  Upload suara pemenang/terompet
+                  <input type="file" accept="audio/*" className="hidden" onChange={(event) => handleCustomSoundUpload(event.target.files?.[0], "win")} />
+                </label>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" onClick={() => setCustomSpinSound("")} className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-bold text-slate-500">Reset spin</button>
+                  <button type="button" onClick={() => setCustomWinSound("")} className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-bold text-slate-500">Reset menang</button>
+                </div>
+              </div>
 
               <button
                 onClick={spin}
@@ -304,7 +362,7 @@ export default function HomePage() {
               {/* <Stat label="Mode spin" value={`${winnerCount} nama`} /> */}
             </div>
 
-            <SpinWheel names={names} spinning={spinning} rotation={rotation} onSpin={spin} spinDurationMs={spinDuration * 1000} />
+            <SpinWheel names={names} spinning={spinning} rotation={rotation} onSpin={spin} spinDurationMs={spinDuration * 1000} winnerCount={winnerCount} />
             <p className="mt-3 text-center text-sm font-semibold text-slate-500">Klik tombol spin atau klik poros wheel untuk memulai undian.</p>
 
             <div className="mt-6 rounded-3xl bg-slate-950 p-5 text-white">
