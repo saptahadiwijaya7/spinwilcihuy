@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "Spinwil Cihuy",
   description: "Aplikasi undian spinwheel untuk apapun.",
   icons: {
-    icon: "/img/favicon.ico",
+    icon: "/favicon/favicon.ico",
   },
 };
 
