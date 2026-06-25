@@ -6,6 +6,7 @@ import ImportPanel from "@/components/ImportPanel";
 import SpinWheel from "@/components/SpinWheel";
 import WinnerList, { WinnerRecord } from "@/components/WinnerList";
 import WinnerPopup from "@/components/WinnerPopup";
+import AdBannerPopup from "@/components/AdBannerPopup";
 import { normalizeNames } from "@/lib/randomizer";
 import { calculateAccurateSpin } from "@/lib/spinLogic";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -37,6 +38,9 @@ export default function HomePage() {
   const revealTimerRef = useRef<number | null>(null);
   const [customSpinSound, setCustomSpinSound] = useState<string>("");
   const [customWinSound, setCustomWinSound] = useState<string>("");
+  const [adBannerEnabled, setAdBannerEnabled] = useState(false);
+  const [adBannerAsset, setAdBannerAsset] = useState<string>("");
+  const [showAdBanner, setShowAdBanner] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const spinSoundTimerRef = useRef<number | null>(null);
   const spinAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -50,7 +54,7 @@ export default function HomePage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     try {
-      const data = JSON.parse(raw) as { names?: string[]; winners?: WinnerRecord[]; spinDuration?: number; winnerRevealDelay?: number; soundMuted?: boolean; customSpinSound?: string; customWinSound?: string };
+      const data = JSON.parse(raw) as { names?: string[]; winners?: WinnerRecord[]; spinDuration?: number; winnerRevealDelay?: number; soundMuted?: boolean; customSpinSound?: string; customWinSound?: string; adBannerEnabled?: boolean; adBannerAsset?: string };
       setNames(normalizeNames(data.names ?? []));
       setWinners(data.winners ?? []);
       setSpinDuration(Math.max(2, Math.min(60, Number(data.spinDuration ?? 5))));
@@ -58,6 +62,8 @@ export default function HomePage() {
       setSoundMuted(Boolean(data.soundMuted));
       setCustomSpinSound(data.customSpinSound ?? "");
       setCustomWinSound(data.customWinSound ?? "");
+      setAdBannerEnabled(Boolean(data.adBannerEnabled));
+      setAdBannerAsset(data.adBannerAsset ?? "");
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -88,8 +94,8 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ names, winners, spinDuration, winnerRevealDelay, soundMuted, customSpinSound, customWinSound }));
-  }, [names, winners, spinDuration, winnerRevealDelay, soundMuted, customSpinSound, customWinSound]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ names, winners, spinDuration, winnerRevealDelay, soundMuted, customSpinSound, customWinSound, adBannerEnabled, adBannerAsset }));
+  }, [names, winners, spinDuration, winnerRevealDelay, soundMuted, customSpinSound, customWinSound, adBannerEnabled, adBannerAsset]);
 
   function addNames(incoming: string[]) {
     setNames((current) => normalizeNames([...current, ...incoming]).slice(0, 1000));
@@ -98,6 +104,8 @@ export default function HomePage() {
   function clearNames() {
     setNames([]);
     setLatestWinners([]);
+    setShowAdBanner(false);
+    setShowWinnerPopup(false);
   }
 
   function resetAll() {
@@ -105,6 +113,8 @@ export default function HomePage() {
     setWinners([]);
     setHistory([]);
     setLatestWinners([]);
+    setShowAdBanner(false);
+    setShowWinnerPopup(false);
     localStorage.removeItem(STORAGE_KEY);
     if (spinFinishTimerRef.current !== null) {
       window.clearTimeout(spinFinishTimerRef.current);
@@ -119,6 +129,8 @@ export default function HomePage() {
   function resetWinners() {
     setWinners([]);
     setLatestWinners([]);
+    setShowAdBanner(false);
+    setShowWinnerPopup(false);
   }
 
   function undoLastSpin() {
@@ -127,6 +139,8 @@ export default function HomePage() {
     setNames(last.previousNames);
     setWinners(last.previousWinners);
     setLatestWinners([]);
+    setShowAdBanner(false);
+    setShowWinnerPopup(false);
     setHistory((current) => current.slice(0, -1));
   }
 
@@ -207,6 +221,28 @@ export default function HomePage() {
     reader.readAsDataURL(file);
   }
 
+  function handleAdBannerUpload(file: File | undefined) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAdBannerAsset(String(reader.result ?? ""));
+      setAdBannerEnabled(true);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function revealWinnerPopup() {
+    setShowAdBanner(false);
+    setShowWinnerPopup(true);
+    playTrumpetSound();
+    confetti({ particleCount: 160, spread: 80, origin: { y: 0.62 } });
+  }
+
+  function closeAdBannerAndRevealWinners() {
+    if (latestWinners.length > 0) revealWinnerPopup();
+    else setShowAdBanner(false);
+  }
+
   function playTrumpetSound() {
     if (!soundMutedRef.current && customWinSound && winAudioRef.current) {
       winAudioRef.current.currentTime = 0;
@@ -241,6 +277,8 @@ export default function HomePage() {
 
     setHistory((current) => [...current, { previousNames: names, previousWinners: winners }]);
     setLatestWinners([]);
+    setShowWinnerPopup(false);
+    setShowAdBanner(false);
     setSpinning(true);
     const spinDurationMs = spinDuration * 1000;
     const revealDelayMs = winnerRevealDelay * 1000;
@@ -270,9 +308,12 @@ export default function HomePage() {
         setNames(result.remaining);
         setWinners((current) => [...current, ...records]);
         setLatestWinners(result.winners);
-        setShowWinnerPopup(true);
-        playTrumpetSound();
-        confetti({ particleCount: 160, spread: 80, origin: { y: 0.62 } });
+
+        if (adBannerEnabled && adBannerAsset) {
+          setShowAdBanner(true);
+        } else {
+          revealWinnerPopup();
+        }
       }, revealDelayMs);
     }, spinDurationMs);
   }
@@ -281,6 +322,7 @@ export default function HomePage() {
     <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
       <audio ref={spinAudioRef} src={customSpinSound || undefined} preload="auto" />
       <audio ref={winAudioRef} src={customWinSound || undefined} preload="auto" />
+      {!isWheelFullscreen && <AdBannerPopup open={showAdBanner} assetUrl={adBannerAsset} onClose={closeAdBannerAndRevealWinners} />}
       {!isWheelFullscreen && <WinnerPopup winners={latestWinners} open={showWinnerPopup} onClose={() => setShowWinnerPopup(false)} />}
       <div className="mx-auto max-w-7xl">
         <header className="mascot-header relative mb-6 overflow-hidden rounded-[2rem] p-5 shadow-soft sm:p-7">
@@ -408,6 +450,40 @@ export default function HomePage() {
                 </div>
               </div>
 
+              <div className="mb-4 rounded-2xl border border-[#f4a7c0] bg-[#fff5fa] p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-800">Popup banner iklan</p>
+                    <p className="text-xs font-semibold text-slate-500">Muncul setelah wheel berhenti, sebelum pemenang tampil.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAdBannerEnabled((current) => !current)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-black ${adBannerEnabled ? "bg-[#ed3969] text-white" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}
+                  >
+                    {adBannerEnabled ? "Aktif" : "Nonaktif"}
+                  </button>
+                </div>
+
+                <label className="block cursor-pointer rounded-xl bg-white px-3 py-2 text-center text-xs font-bold text-slate-700 shadow-sm hover:bg-[#ffe5f0]">
+                  Upload banner gambar / GIF
+                  <input type="file" accept="image/*,.gif" className="hidden" onChange={(event) => handleAdBannerUpload(event.target.files?.[0])} />
+                </label>
+
+                {adBannerAsset ? (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-white bg-white shadow-sm">
+                    <img src={adBannerAsset} alt="Preview banner iklan" className="max-h-28 w-full object-contain" />
+                  </div>
+                ) : (
+                  <p className="mt-2 text-center text-[11px] font-semibold text-slate-500">Belum ada banner. Upload gambar atau GIF terlebih dahulu.</p>
+                )}
+
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setAdBannerAsset("")} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-500">Reset banner</button>
+                  <button type="button" onClick={() => setShowAdBanner(adBannerEnabled && Boolean(adBannerAsset))} disabled={!adBannerAsset} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-500 disabled:opacity-40">Preview</button>
+                </div>
+              </div>
+
               <button
                 onClick={spin}
                 disabled={!canSpin}
@@ -446,6 +522,7 @@ export default function HomePage() {
               winnerCount={winnerCount}
               scale={wheelScale}
             />
+            {isWheelFullscreen && <AdBannerPopup open={showAdBanner} assetUrl={adBannerAsset} onClose={closeAdBannerAndRevealWinners} />}
             {isWheelFullscreen && <WinnerPopup winners={latestWinners} open={showWinnerPopup} onClose={() => setShowWinnerPopup(false)} />}
 
             <div className="mt-6 rounded-3xl bg-slate-950 p-5 text-white">

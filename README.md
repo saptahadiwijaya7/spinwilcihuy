@@ -86,3 +86,10 @@ File > Import > Upload > pilih file CSV
 - Posisi berhenti wheel sekarang diarahkan ke area tengah segment nama, bukan ke garis batas antar nama.
 - Logic pemenang tetap dihitung dari nama yang benar-benar berada di bawah setiap panah.
 - Untuk data besar, segment wheel mengikuti seluruh nama aktif; label nama otomatis disembunyikan agar tampilan tetap rapi.
+
+## Update popup banner iklan
+- Popup banner iklan opsional sebelum popup pemenang.
+- Banner muncul setelah wheel berhenti berputar.
+- Pemenang baru tampil setelah banner ditutup lewat tombol X.
+- Banner bisa diaktifkan/nonaktifkan dari dashboard.
+- Asset banner bisa upload gambar atau GIF.
