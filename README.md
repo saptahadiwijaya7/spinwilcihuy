@@ -111,3 +111,8 @@ Update transparansi wheel:
 - Label nama diposisikan lebih dekat ke area luar wheel.
 - Nama yang sedang dilewati saat spin tampil di poros wheel sebagai indikator transparansi.
 - Mode Bigwil tetap menampilkan panel Pemenang Terbaru di bawah layar.
+
+## Fix v1.0.1
+- Wheel sekarang digambar dengan SVG slice, bukan conic-gradient, supaya warna segment, label nama, panah, dan logic pemenang memakai sistem sudut yang sama.
+- Label nama diposisikan di tengah segment, bukan garis pembatas.
+- Pemenang dihitung dari segment yang benar-benar berada di bawah panah.
