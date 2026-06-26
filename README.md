@@ -93,3 +93,21 @@ File > Import > Upload > pilih file CSV
 - Pemenang baru tampil setelah banner ditutup lewat tombol X.
 - Banner bisa diaktifkan/nonaktifkan dari dashboard.
 - Asset banner bisa upload gambar atau GIF.
+
+## Update Bigwil winner panel
+- Mode Bigwil sekarang tetap menampilkan komponen Pemenang Terbaru di bawah wheel.
+- Komponen statistik dan preview peserta tetap disembunyikan saat Bigwil agar layar tetap fokus.
+
+## Update Bigwil bottom panel
+- Panel Pemenang Terbaru pada mode Bigwil diposisikan fixed di bagian bawah layar.
+- Wheel diberi area khusus agar tidak overlap dengan panel pemenang terbaru saat ukuran wheel besar.
+
+## Spinwil Cihuy v1.0
+
+Update transparansi wheel:
+- Semua nama peserta selalu ditampilkan di wheel, termasuk saat data peserta banyak.
+- Font nama otomatis mengecil sesuai jumlah peserta.
+- Warna wheel memakai 20 warna yang diulang agar segment tetap lebih jelas.
+- Label nama diposisikan lebih dekat ke area luar wheel.
+- Nama yang sedang dilewati saat spin tampil di poros wheel sebagai indikator transparansi.
+- Mode Bigwil tetap menampilkan panel Pemenang Terbaru di bawah layar.

@@ -33,6 +33,7 @@ export default function HomePage() {
   const [wheelScale, setWheelScale] = useState(1);
   const [isWheelFullscreen, setIsWheelFullscreen] = useState(false);
   const [isPageFullscreen, setIsPageFullscreen] = useState(false);
+  const [currentPassingName, setCurrentPassingName] = useState("");
   const wheelFullscreenRef = useRef<HTMLElement | null>(null);
   const spinFinishTimerRef = useRef<number | null>(null);
   const revealTimerRef = useRef<number | null>(null);
@@ -43,6 +44,7 @@ export default function HomePage() {
   const [showAdBanner, setShowAdBanner] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const spinSoundTimerRef = useRef<number | null>(null);
+  const passingNameTimerRef = useRef<number | null>(null);
   const spinAudioRef = useRef<HTMLAudioElement | null>(null);
   const winAudioRef = useRef<HTMLAudioElement | null>(null);
   const soundMutedRef = useRef(soundMuted);
@@ -90,6 +92,7 @@ export default function HomePage() {
       stopSpinSound();
       if (spinFinishTimerRef.current !== null) window.clearTimeout(spinFinishTimerRef.current);
       if (revealTimerRef.current !== null) window.clearTimeout(revealTimerRef.current);
+      if (passingNameTimerRef.current !== null) window.clearInterval(passingNameTimerRef.current);
     };
   }, []);
 
@@ -104,6 +107,7 @@ export default function HomePage() {
   function clearNames() {
     setNames([]);
     setLatestWinners([]);
+    setCurrentPassingName("");
     setShowAdBanner(false);
     setShowWinnerPopup(false);
   }
@@ -113,6 +117,7 @@ export default function HomePage() {
     setWinners([]);
     setHistory([]);
     setLatestWinners([]);
+    setCurrentPassingName("");
     setShowAdBanner(false);
     setShowWinnerPopup(false);
     localStorage.removeItem(STORAGE_KEY);
@@ -129,6 +134,7 @@ export default function HomePage() {
   function resetWinners() {
     setWinners([]);
     setLatestWinners([]);
+    setCurrentPassingName("");
     setShowAdBanner(false);
     setShowWinnerPopup(false);
   }
@@ -139,6 +145,7 @@ export default function HomePage() {
     setNames(last.previousNames);
     setWinners(last.previousWinners);
     setLatestWinners([]);
+    setCurrentPassingName("");
     setShowAdBanner(false);
     setShowWinnerPopup(false);
     setHistory((current) => current.slice(0, -1));
@@ -210,6 +217,29 @@ export default function HomePage() {
     spinSoundTimerRef.current = null;
   }
 
+  function startPassingNamePreview(sourceNames: string[], plannedWinners: string[]) {
+    if (passingNameTimerRef.current !== null) {
+      window.clearInterval(passingNameTimerRef.current);
+      passingNameTimerRef.current = null;
+    }
+    if (!sourceNames.length) return;
+
+    let tick = 0;
+    passingNameTimerRef.current = window.setInterval(() => {
+      tick += 1;
+      const randomName = sourceNames[Math.floor(Math.random() * sourceNames.length)];
+      setCurrentPassingName(randomName ?? "");
+    }, 70);
+
+    window.setTimeout(() => {
+      if (passingNameTimerRef.current !== null) {
+        window.clearInterval(passingNameTimerRef.current);
+        passingNameTimerRef.current = null;
+      }
+      setCurrentPassingName(plannedWinners[0] ?? "");
+    }, Math.max(250, spinDuration * 1000 - 220));
+  }
+
   function handleCustomSoundUpload(file: File | undefined, target: "spin" | "win") {
     if (!file) return;
     const reader = new FileReader();
@@ -277,12 +307,14 @@ export default function HomePage() {
 
     setHistory((current) => [...current, { previousNames: names, previousWinners: winners }]);
     setLatestWinners([]);
+    setCurrentPassingName("");
     setShowWinnerPopup(false);
     setShowAdBanner(false);
     setSpinning(true);
     const spinDurationMs = spinDuration * 1000;
     const revealDelayMs = winnerRevealDelay * 1000;
     startSpinSound();
+    startPassingNamePreview(names, plannedResult.winners);
     setRotation(plannedResult.finalRotation);
 
     if (spinFinishTimerRef.current !== null) {
@@ -294,6 +326,11 @@ export default function HomePage() {
 
     spinFinishTimerRef.current = window.setTimeout(() => {
       stopSpinSound();
+      if (passingNameTimerRef.current !== null) {
+        window.clearInterval(passingNameTimerRef.current);
+        passingNameTimerRef.current = null;
+      }
+      setCurrentPassingName(plannedResult.winners[0] ?? "");
       setSpinning(false);
 
       revealTimerRef.current = window.setTimeout(() => {
@@ -504,7 +541,7 @@ export default function HomePage() {
           </aside>
 
           <section ref={wheelFullscreenRef} className="wheel-fullscreen rounded-3xl bg-white/70 p-5 shadow-soft backdrop-blur">
-            <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-4 items-stretch">
+            <div className="bigwil-hide mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-4 items-stretch">
               <Stat label="Peserta aktif" value={names.length} />
               <Stat label="Σ pemenang" value={winners.length} />
               <Stat label="Mode spin" value={winnerCount} />
@@ -513,19 +550,22 @@ export default function HomePage() {
             </div>
 
 
-            <SpinWheel
-              names={names}
-              spinning={spinning}
-              rotation={rotation}
-              onSpin={spin}
-              spinDurationMs={spinDuration * 1000}
-              winnerCount={winnerCount}
-              scale={wheelScale}
-            />
+            <div className="bigwil-wheel-stage">
+              <SpinWheel
+                names={names}
+                spinning={spinning}
+                rotation={rotation}
+                onSpin={spin}
+                spinDurationMs={spinDuration * 1000}
+                winnerCount={winnerCount}
+                scale={wheelScale}
+                currentPassingName={currentPassingName}
+              />
+            </div>
             {isWheelFullscreen && <AdBannerPopup open={showAdBanner} assetUrl={adBannerAsset} onClose={closeAdBannerAndRevealWinners} />}
             {isWheelFullscreen && <WinnerPopup winners={latestWinners} open={showWinnerPopup} onClose={() => setShowWinnerPopup(false)} />}
 
-            <div className="mt-6 rounded-3xl bg-slate-950 p-5 text-white">
+            <div className="bigwil-latest-winners mt-6 rounded-3xl bg-slate-950 p-5 text-white">
               <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#f091b6]">Pemenang Terbaru</p>
               {latestWinners.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -538,7 +578,7 @@ export default function HomePage() {
               )}
             </div>
 
-            <div className="mt-5 rounded-3xl bg-white p-5">
+            <div className="bigwil-hide mt-5 rounded-3xl bg-white p-5">
               <h2 className="mb-3 text-lg font-bold text-slate-950">Preview Peserta Aktif</h2>
               {participantPreview.length ? (
                 <div className="flex flex-wrap gap-2">
